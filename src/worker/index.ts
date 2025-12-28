@@ -295,17 +295,20 @@ app.get("/api/classes/:scheduleId/students", supabaseAuth, async (c) => {
     .from("teachers")
     .select("*")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
+  if (!teacher) return c.json({ error: "Perfil de profesor no encontrado" }, 403);
   const { data: schedule } = await sb
     .from("schedules")
     .select("subject_id")
     .eq("id", scheduleId)
-    .single();
+    .maybeSingle();
+  if (!schedule) return c.json({ error: "Clase no encontrada" }, 404);
   const { data: subject } = await sb
     .from("subjects")
     .select("*")
     .eq("id", (schedule as any).subject_id)
-    .single();
+    .maybeSingle();
+  if (!subject) return c.json({ error: "Asignatura no encontrada" }, 404);
   if ((subject as any).teacher_id !== (teacher as any).id) {
     return c.json({ error: "No tienes acceso a esta clase" }, 403);
   }
@@ -344,7 +347,8 @@ app.get("/api/subjects/:subjectId/students", supabaseAuth, async (c) => {
     .from("teachers")
     .select("*")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
+  if (!teacher) return c.json({ error: "Perfil de profesor no encontrado" }, 403);
   const { data: subject } = await sb
     .from("subjects")
     .select("*")
@@ -380,7 +384,8 @@ app.post("/api/attendance", supabaseAuth, async (c) => {
     .from("teachers")
     .select("*")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
+  if (!teacher) return c.json({ error: "Perfil de profesor no encontrado" }, 403);
   const { data: subject } = await sb
     .from("subjects")
     .select("id")
