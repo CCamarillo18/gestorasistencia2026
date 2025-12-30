@@ -1,18 +1,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "019ace42-29d2-7f82-91c0-db9ed6125244",
-  "main": "./src/worker/index.ts",
+  "name": "gestorasistencia-worker",
+  "main": "src/worker/index.ts",
   "compatibility_date": "2025-06-17",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
-  },
-  "upload_source_maps": true,
-  "assets": {
-    "not_found_handling": "single-page-application"
-  },
-  "vars": {
-    "SUPABASE_URL": "https://wlyetoqyolmwynydfyxr.supabase.co",
-    "SUPABASE_ANON_KEY": "sb_publishable_HRntZMPZCpol-NMf0JqJ6A_DbnLSTZp"
   }
 }

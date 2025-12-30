@@ -1,0 +1,1 @@
+El archivo public/_redirects con el contenido /* /index.html 200 es fundamental para el funcionamiento de la SPA en Cloudflare. No se debe omitir en el código ni modificar la lógica de rutas en App.tsx que dependa de esta redirección (como el callback de autenticación).

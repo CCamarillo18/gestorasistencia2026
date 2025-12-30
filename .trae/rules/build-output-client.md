@@ -1,0 +1,1 @@
+El directorio de salida para el despliegue en Cloudflare Pages es estrictamente dist/client. Bajo ninguna circunstancia se debe sugerir el uso de la raíz dist o cualquier otra carpeta para comandos de wrangler pages deploy.

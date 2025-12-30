@@ -16,7 +16,7 @@ import {
 
 const items = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { key: "attendance", label: "Mis Clases", icon: ClipboardCheck, path: "/dashboard" },
+  { key: "attendance", label: "Mis Clases", icon: ClipboardCheck, path: "/mis-clases" },
   { key: "students", label: "Estudiantes", icon: Users, path: "/students" },
   { key: "absences", label: "Ausencias", icon: Bell, path: "/school-absences" },
   { key: "calendar", label: "Calendario", icon: CalendarDays, path: "/calendar" },

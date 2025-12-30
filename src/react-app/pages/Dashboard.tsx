@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [classes, setClasses] = useState<TodayClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [absences, setAbsences] = useState<DailyAbsence[]>([]);
+  const [dailySummary, setDailySummary] = useState<{ present: number; absent: number; late: number; total: number }>({ present: 0, absent: 0, late: 0, total: 0 });
   const [reports, setReports] = useState<AttendanceReport[]>([]);
   const [teacherName, setTeacherName] = useState<string | null>(null);
   const [studentsCount, setStudentsCount] = useState<number>(0);
@@ -45,7 +46,16 @@ export default function Dashboard() {
       const absResp = await apiFetch(`/api/absences/daily?date=${today}`);
       if (absResp.ok) {
         const d = await absResp.json();
-        setAbsences(d);
+        const list = Array.isArray(d) ? d : (d?.data || []);
+        setAbsences(list);
+        if (d?.summary) {
+          setDailySummary({
+            present: Number(d.summary.present) || 0,
+            absent: Number(d.summary.absent) || 0,
+            late: Number(d.summary.late) || 0,
+            total: Number(d.summary.total) || 0,
+          });
+        }
       }
       const repResp = await apiFetch(`/api/reports/daily?date=${today}`);
       if (repResp.ok) {
@@ -60,8 +70,9 @@ export default function Dashboard() {
       const studentsResp = await apiFetch("/api/students/all");
       if (studentsResp.ok) {
         const s = await studentsResp.json();
-        setStudentsCount((s || []).length);
-        setPiarCount((s || []).filter((x: any) => x.piar === 1 || x.has_piar === 1).length);
+        const list = Array.isArray(s) ? s : [];
+        setStudentsCount(list.length);
+        setPiarCount(list.filter((x: any) => x.piar === 1 || x.has_piar === 1).length);
       }
       const days = Array.from({ length: 7 }).map((_v, i) => {
         const d = new Date();
@@ -74,8 +85,9 @@ export default function Dashboard() {
         const resp = await apiFetch(`/api/reports/daily?date=${dateStr}`);
         if (resp.ok) {
           const arr: AttendanceReport[] = await resp.json();
-          const total = arr.reduce((acc, r) => acc + r.total_students, 0);
-          const present = arr.reduce((acc, r) => acc + r.present_count, 0);
+          const list = Array.isArray(arr) ? arr : [];
+          const total = list.reduce((acc, r) => acc + (r.total_students || 0), 0);
+          const present = list.reduce((acc, r) => acc + (r.present_count || 0), 0);
           const perc = total > 0 ? Math.round((present / total) * 1000) / 10 : 0;
           trend.push({
             day: d.toLocaleDateString("es-CO", { weekday: "short" }),
@@ -176,7 +188,7 @@ export default function Dashboard() {
           <div className="bg-white rounded-[3.5rem] shadow-xl shadow-slate-200/60 border border-slate-100 p-6 hover:scale-[1.02] transition duration-300">
             <p className="text-sm text-slate-600 mb-1">Alertas Críticas</p>
             <p className="text-3xl font-black text-slate-800">
-              {absences.filter((a) => (a.absence_count || 0) >= 3).length}
+              {dailySummary.absent}
             </p>
           </div>
           <div className="bg-white rounded-[3.5rem] shadow-xl shadow-slate-200/60 border border-slate-100 p-6 hover:scale-[1.02] transition duration-300">

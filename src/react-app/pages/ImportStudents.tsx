@@ -10,6 +10,7 @@ import {
   FileText,
   Users,
 } from "lucide-react";
+import { apiFetch } from "@/react-app/lib/api";
 
 export default function ImportStudents() {
   const navigate = useNavigate();
@@ -50,13 +51,17 @@ export default function ImportStudents() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/admin/students/import", {
-        method: "POST",
-        body: formData,
-      });
-
-      const result = await response.json();
-
+      const response = await apiFetch("/api/admin/students/import", { method: "POST", body: formData });
+      const ct = response.headers.get("content-type") || "";
+      let result: any = null;
+      if (ct.includes("application/json")) {
+        result = await response.json();
+      } else {
+        const text = await response.text();
+        console.error("Respuesta no JSON del servidor:", text);
+        setError("Respuesta inválida del servidor");
+        return;
+      }
       if (response.ok) {
         setSuccess(
           `Se importaron ${result.imported} estudiantes exitosamente`

@@ -1,13 +1,35 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import Navbar from "@/react-app/components/Navbar";
 import { apiFetch } from "@/react-app/lib/api";
-import { ArrowLeft, Users, Cog, Edit2, Trash2, Save, X, AlertCircle, CheckCircle2, Upload } from "lucide-react";
+import { ArrowLeft, Users, Cog, Edit2, Trash2, AlertCircle, CheckCircle2, Upload } from "lucide-react";
 import type { Student, Course } from "@/shared/types";
 
 type TabType = "students" | "config";
 
-// interfaz no usada eliminada
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(_: any) {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-10 text-center bg-red-50 min-h-screen">
+          <h1 className="text-2xl font-bold text-red-600 mb-2">Se detectó un error de renderizado</h1>
+          <p className="text-gray-600 mb-4">El panel no pudo procesar la información actual.</p>
+          <button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-4 py-2 rounded-lg">
+            Recargar Panel
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -17,9 +39,9 @@ export default function Admin() {
   const [success, setSuccess] = useState<string | null>(null);
   const [activeYear, setActiveYear] = useState<number>(new Date().getFullYear());
   const [termsCount, setTermsCount] = useState<number>(3);
-  const [subjectHours, setSubjectHours] = useState<Array<{subject:string;grade:number;hours:number}>>([]);
-  const [isMobile, setIsMobile] = useState<boolean>(false);
-  const [history, setHistory] = useState<Array<{year:number;vigente:boolean;grados_6_9:Array<{subject:string;hours:number}>;grados_10_11:Array<{subject:string;hours:number}>}>>([]);
+  const [subjectHours, setSubjectHours] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+  
   const SUBJECT_OPTIONS: Array<{ label: string; value: string }> = [
     { label: "Biol.", value: "Biología" },
     { label: "Fís.", value: "Física" },
@@ -42,9 +64,9 @@ export default function Admin() {
     { label: "C. Ciudad.", value: "C. Ciudadanas" },
     { label: "Ed. Fís.", value: "Ed. Física" },
   ];
+
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const pressTimerRef = useRef<number | null>(null);
-  const pressTargetRef = useRef<{ subject: string; grade: number } | null>(null);
 
   const subjectColor = (name: string) => {
     if (name === "Matemáticas") return "bg-red-600";
@@ -71,14 +93,9 @@ export default function Admin() {
   };
 
   const [courses, setCourses] = useState<Course[]>([]);
-  // estado de profesores eliminado
-
-  // Students state
   const [students, setStudents] = useState<Student[]>([]);
   const [editingStudent, setEditingStudent] = useState<number | null>(null);
   const [studentForm, setStudentForm] = useState({ name: "", course_id: 0 });
-
-  // Attendance state eliminado (no usado)
 
   useEffect(() => {
     loadCourses();
@@ -101,8 +118,6 @@ export default function Admin() {
     }
   };
 
-  // carga de profesores eliminada
-
   const loadStudents = async () => {
     setLoading(true);
     try {
@@ -118,38 +133,47 @@ export default function Admin() {
     }
   };
 
-  // Eliminado: carga de registros de asistencia no usada
-
   const loadConfig = async () => {
     setLoading(true);
     try {
-      const s = await apiFetch("/api/admin/settings");
-      if (s.ok) {
-        const d = await s.json();
-        setActiveYear(d.active_year);
-        setTermsCount(d.terms_count);
+      try {
+        const s = await apiFetch("/api/admin/settings");
+        if (s.ok) {
+          const d = await s.json();
+          setActiveYear(d?.active_year ?? new Date().getFullYear());
+          setTermsCount(d?.terms_count ?? 3);
+        }
+      } catch (e) {
+        console.error("settings load error", e);
       }
-      const h = await apiFetch("/api/admin/subject-hours");
-      if (h.ok) {
-        const arr = await h.json();
-        setSubjectHours(arr);
+      try {
+        const h = await apiFetch("/api/admin/subject-hours");
+        if (h.ok) {
+          const arr = await h.json();
+          setSubjectHours(Array.isArray(arr) ? arr : []);
+        } else {
+          setSubjectHours([]);
+        }
+      } catch (e) {
+        console.error("subject-hours load error", e);
+        setSubjectHours([]);
       }
-      const hist = await apiFetch("/api/admin/config-store/history");
-      if (hist.ok) {
-        const arr = await hist.json();
-        setHistory(arr);
+      try {
+        const hist = await apiFetch("/api/admin/config-store/history");
+        if (hist.ok) {
+          const arr = await hist.json();
+          setHistory(Array.isArray(arr) ? arr : []);
+        } else {
+          setHistory([]);
+        }
+      } catch (e) {
+        console.error("history load error", e);
+        setHistory([]);
       }
-      // perfil de profesor omitido
-      setIsMobile(window.innerWidth < 768);
-      window.addEventListener("resize", () => setIsMobile(window.innerWidth < 768));
-    } catch (e) {
-      console.error(e);
     } finally {
       setLoading(false);
     }
   };
-
-  // manejo de profesores eliminado
 
   const handleUpdateStudent = async (studentId: number) => {
     setError(null);
@@ -181,12 +205,10 @@ export default function Admin() {
 
   const handleDeleteStudent = async (studentId: number) => {
     if (!confirm("¿Estás seguro de eliminar este estudiante?")) return;
-
     try {
       const response = await apiFetch(`/api/admin/students/${studentId}`, {
         method: "DELETE",
       });
-
       if (response.ok) {
         setSuccess("Estudiante eliminado exitosamente");
         loadStudents();
@@ -200,10 +222,6 @@ export default function Admin() {
     }
   };
 
-  // Eliminado: borrado de registro de asistencia no usado
-
-  // inicio de edición de profesor eliminado
-
   const startEditStudent = (student: Student) => {
     setEditingStudent(student.id);
     setStudentForm({
@@ -212,491 +230,283 @@ export default function Admin() {
     });
   };
 
+  console.log("Estado de datos:", { students, history, subjectHours });
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <Navbar />
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+        <Navbar />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span>Volver al Dashboard</span>
-          </button>
-
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Panel de Administración
-          </h1>
-          <p className="text-gray-600">
-            Gestiona profesores, estudiantes y registros de asistencia
-          </p>
-        </div>
-
-        {/* Messages */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <p className="text-red-800 text-sm">{error}</p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-8">
+            <button
+              onClick={() => navigate("/dashboard")}
+              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>Volver al Dashboard</span>
+            </button>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Panel de Administración</h1>
           </div>
-        )}
 
-        {success && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-start space-x-3">
-            <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-            <p className="text-green-800 text-sm">{success}</p>
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-red-800 text-sm">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-start space-x-3">
+              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <p className="text-green-800 text-sm">{success}</p>
+            </div>
+          )}
+
+          <div className="flex space-x-2 mb-4 bg-white/80 backdrop-blur-sm rounded-xl p-2 shadow-lg border border-gray-200">
+            <button
+              onClick={() => setActiveTab("config")}
+              className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-lg font-semibold transition-all ${
+                activeTab === "config" ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg" : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              <Cog className="w-4 h-4" />
+              <span>Configuración</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("students")}
+              className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-lg font-semibold transition-all ${
+                activeTab === "students" ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg" : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Estudiantes</span>
+            </button>
           </div>
-        )}
 
-        {/* Tabs */}
-        <div className="flex space-x-2 mb-4 bg-white/80 backdrop-blur-sm rounded-xl p-2 shadow-lg border border-gray-200">
-          <button
-            onClick={() => setActiveTab("config")}
-            className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-lg font-semibold transition-all ${
-              activeTab === "config"
-                ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
-          >
-            <Cog className="w-4 h-4" />
-            <span>Configuración</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("students")}
-            className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-lg font-semibold transition-all ${
-              activeTab === "students"
-                ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Estudiantes</span>
-          </button>
-        </div>
-
-        {/* Content */}
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          </div>
-        ) : (
-          <>
-            {/* Eliminado: pestaña de profesores */}
-
-            {/* Students Tab */}
-            {activeTab === "students" && (
-              <>
-                <div className="mb-6 flex justify-end">
-                  <button
-                    onClick={() => navigate("/admin/import-students")}
-                    className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-green-500/50 hover:shadow-xl hover:shadow-green-600/50 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <Upload className="w-5 h-5" />
-                    <span>Importar desde CSV</span>
-                  </button>
-                </div>
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                <div className="divide-y divide-gray-200">
-                  {students.map((student) => (
-                    <div key={student.id} className="p-6">
-                      {editingStudent === student.id ? (
-                        <div className="space-y-4">
-                          <input
-                            type="text"
-                            value={studentForm.name}
-                            onChange={(e) =>
-                              setStudentForm({ ...studentForm, name: e.target.value })
-                            }
-                            placeholder="Nombre"
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                          />
-                          <select
-                            value={studentForm.course_id}
-                            onChange={(e) =>
-                              setStudentForm({
-                                ...studentForm,
-                                course_id: parseInt(e.target.value),
-                              })
-                            }
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                          >
-                            <option value={0}>Selecciona un curso</option>
-                            {courses.map((course) => (
-                              <option key={course.id} value={course.id}>
-                                {course.name}
-                              </option>
-                            ))}
-                          </select>
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleUpdateStudent(student.id)}
-                              className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-                            >
-                              <Save className="w-4 h-4" />
-                              <span>Guardar</span>
-                            </button>
-                            <button
-                              onClick={() => setEditingStudent(null)}
-                              className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-                            >
-                              <X className="w-4 h-4" />
-                              <span>Cancelar</span>
-                            </button>
-                          </div>
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : (
+            <>
+              {activeTab === "students" && (
+                <>
+                  <div className="mb-6 flex justify-end">
+                    <button
+                      onClick={() => navigate("/admin/import-students")}
+                      className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all"
+                    >
+                      <Upload className="w-5 h-5" />
+                      <span>Importar desde CSV</span>
+                    </button>
+                  </div>
+                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+                    <div className="divide-y divide-gray-200">
+                      {(students || []).map((student) => (
+                        <div key={student.id} className="p-6">
+                          {editingStudent === student.id ? (
+                            <div className="space-y-4">
+                              <input
+                                type="text"
+                                value={studentForm.name}
+                                onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-xl"
+                              />
+                              <select
+                                value={studentForm.course_id}
+                                onChange={(e) => setStudentForm({ ...studentForm, course_id: parseInt(e.target.value) })}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-xl"
+                              >
+                                <option value={0}>Selecciona un curso</option>
+                                {(courses || []).map((course) => (
+                                  <option key={course.id} value={course.id}>{course.name}</option>
+                                ))}
+                              </select>
+                              <div className="flex space-x-2">
+                                <button onClick={() => handleUpdateStudent(student.id)} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">Guardar</button>
+                                <button onClick={() => setEditingStudent(null)} className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700">Cancelar</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="text-lg font-semibold text-gray-900">{student.name}</h3>
+                                <p className="text-sm text-gray-600">Curso: {getCourseNameById(student.course_id)}</p>
+                              </div>
+                              <div className="flex space-x-2">
+                                <button onClick={() => startEditStudent(student)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"><Edit2 className="w-5 h-5" /></button>
+                                <button onClick={() => handleDeleteStudent(student.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-5 h-5" /></button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900">
-                              {student.name}
-                            </h3>
-                            <p className="text-sm text-gray-600">
-                              Curso: {getCourseNameById(student.course_id)}
-                            </p>
-                            {student.phone && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                Tel: {student.phone}
-                              </p>
-                            )}
-                            {student.guardian_name && (
-                              <p className="text-xs text-gray-500">
-                                Acudiente: {student.guardian_name}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => startEditStudent(student)}
-                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                            >
-                              <Edit2 className="w-5 h-5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteStudent(student.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-              </>
-            )}
+                  </div>
+                </>
+              )}
 
-            {/* Attendance removed */}
-
-            {/* Config Tab */}
-            {activeTab === "config" && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Año lectivo y periodos</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm text-gray-700">Año lectivo</label>
-                      <input
-                        type="number"
-                        min={new Date().getFullYear() - 1}
-                        max={new Date().getFullYear() + 5}
-                        value={activeYear}
-                        onChange={(e) => setActiveYear(parseInt(e.target.value))}
-                        className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-xl"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm text-gray-700">Periodos</label>
-                      <select
-                        value={termsCount}
-                        onChange={(e) => setTermsCount(parseInt(e.target.value))}
-                        className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-xl"
+              {activeTab === "config" && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 p-6">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Año lectivo y periodos</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-sm text-gray-700">Año lectivo</label>
+                        <input
+                          type="number"
+                          value={activeYear}
+                          onChange={(e) => setActiveYear(parseInt(e.target.value))}
+                          className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-xl"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-700">Periodos</label>
+                        <select
+                          value={termsCount}
+                          onChange={(e) => setTermsCount(parseInt(e.target.value))}
+                          className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-xl"
+                        >
+                          <option value={3}>3</option>
+                          <option value={4}>4</option>
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSuccess("Configuración aplicada localmente");
+                          window.dispatchEvent(new CustomEvent("settings-updated", { detail: { active_year: activeYear, terms_count: termsCount } }));
+                        }}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
                       >
-                        <option value={3}>3</option>
-                        <option value={4}>4</option>
-                      </select>
+                        Guardar
+                      </button>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSuccess("Configuración aplicada localmente");
-                        window.dispatchEvent(new CustomEvent("settings-updated", { detail: { active_year: activeYear, terms_count: termsCount } }));
-                      }}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-                    >
-                      Guardar
-                    </button>
                   </div>
-                </div>
-                <div className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Horas por asignatura y grado</h3>
-                  <div className="flex gap-3 mb-3">
-                    <button
-                      onClick={async () => {
-                        const resp = await apiFetch("/api/admin/config-store/save", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ settings: { active_year: activeYear, terms_count: termsCount }, subject_hours: subjectHours }),
-                        });
-                        if (resp.ok) {
-                          const r = await resp.json();
-                          setSuccess(r.warning ? r.warning : `Horas y configuración guardadas (${r.count})`);
-                          const d = { active_year: activeYear, terms_count: termsCount };
-                          window.dispatchEvent(new CustomEvent("settings-updated", { detail: d }));
-                          try {
-                            const hh = await apiFetch("/api/admin/subject-hours");
-                            if (hh.ok) {
-                              setSubjectHours(await hh.json());
-                            }
-                            const hist = await apiFetch("/api/admin/config-store/history");
-                            if (hist.ok) {
-                              setHistory(await hist.json());
-                            }
-                          } catch {}
-                        } else setError("Error al guardar");
-                      }}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-                    >
-                      Guardar horas
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const ok = window.confirm("¿Borrar TODAS las asignaturas y horas en todos los grados?");
-                        if (!ok) return;
-                        const resp = await apiFetch("/api/admin/subject-hours", { method: "DELETE" });
-                        if (resp.ok) {
-                          setSubjectHours([]);
-                          setSuccess("Se borraron todas las asignaturas");
-                        } else {
-                          setError("No se pudo borrar");
-                        }
-                      }}
-                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                    >
-                      Borrar todas
-                    </button>
-                  </div>
-                  <p className="text-gray-600 mb-3">Selecciona una asignatura y pulsa en un grado para sumar horas. Usa Guardar para persistir.</p>
-                  {isMobile && (
-                    <div className="mb-4 p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm">
-                      Esta configuración solo se realiza en PC.
+
+                  <div className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 p-6">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Horas por asignatura y grado</h3>
+                    <div className="flex gap-3 mb-3">
+                      <button
+                        onClick={async () => {
+                          const resp = await apiFetch("/api/admin/config-store/save", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ settings: { active_year: activeYear, terms_count: termsCount }, subject_hours: subjectHours }),
+                          });
+                          if (resp.ok) {
+                            const r = await resp.json();
+                            setSuccess(`Horas y configuración guardadas (${r.count || 0})`);
+                            loadConfig();
+                          } else setError("Error al guardar");
+                        }}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg"
+                      >
+                        Guardar horas
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm("¿Borrar TODAS las asignaturas?")) return;
+                          const resp = await apiFetch("/api/admin/subject-hours", { method: "DELETE" });
+                          if (resp.ok) { setSubjectHours([]); setSuccess("Borrado exitoso"); }
+                        }}
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg"
+                      >
+                        Borrar todas
+                      </button>
                     </div>
-                  )}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {SUBJECT_OPTIONS.map((opt) => {
-                      const isSel = selectedSubject === opt.value;
-                      return (
+
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {(SUBJECT_OPTIONS || []).map((opt) => (
                         <button
                           key={opt.value}
-                          onClick={() => setSelectedSubject(isSel ? null : opt.value)}
+                          onClick={() => setSelectedSubject(selectedSubject === opt.value ? null : opt.value)}
                           className={`px-2 py-1 rounded-xl text-[10px] uppercase font-black ${
-                            isSel ? `${subjectColor(opt.value)} text-white` : "bg-slate-100 text-slate-800"
+                            selectedSubject === opt.value ? `${subjectColor(opt.value)} text-white` : "bg-slate-100 text-slate-800"
                           }`}
                         >
                           {opt.label}
                         </button>
-                      );
-                    })}
-                  </div>
-                  <div className="grid grid-cols-6 gap-3 mb-4">
-                    {[6,7,8,9,10,11].map((g) => (
-                      <div
-                        key={g}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          const subj = e.dataTransfer.getData("text/plain");
-                          const idx = subjectHours.findIndex((r) => r.subject === subj && r.grade === g);
-                          if (idx >= 0) {
-                            const next = [...subjectHours];
-                            next[idx] = { ...next[idx], hours: next[idx].hours + 1 };
-                            setSubjectHours(next);
-                          } else {
-                            setSubjectHours([...subjectHours, { subject: subj, grade: g, hours: 1 }]);
-                          }
-                        }}
-                        onClick={() => {
-                          if (!selectedSubject) return;
-                          const idx = subjectHours.findIndex((r) => r.subject === selectedSubject && r.grade === g);
-                          if (idx >= 0) {
-                            const next = [...subjectHours];
-                            next[idx] = { ...next[idx], hours: next[idx].hours + 1 };
-                            setSubjectHours(next);
-                          } else {
-                            setSubjectHours([...subjectHours, { subject: selectedSubject, grade: g, hours: 1 }]);
-                          }
-                        }}
-                        className="min-h-24 p-3 border border-slate-200 rounded-xl"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-bold text-slate-700">Grado {g}</span>
-                          <span className="text-[10px] text-slate-500">
-                            Total: {subjectHours.filter((r) => r.grade === g).reduce((a,b) => a + b.hours, 0)} h
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {subjectHours.filter((r) => r.grade === g).map((r) => (
-                            <div
-                              key={`${r.subject}-${g}`}
-                              className={`flex items-center gap-1 px-2 py-1 rounded-xl ${subjectColor(r.subject)} text-white text-[10px] uppercase font-black`}
-                              onMouseDown={() => {
-                                pressTargetRef.current = { subject: r.subject, grade: g };
-                                pressTimerRef.current = window.setTimeout(() => {
-                                  const next = subjectHours.filter((x) => !(x.subject === r.subject && x.grade === g));
-                                  setSubjectHours(next);
-                                  pressTimerRef.current = null;
-                                  pressTargetRef.current = null;
-                                }, 3000);
-                              }}
-                              onMouseUp={() => {
-                                if (pressTimerRef.current) {
-                                  clearTimeout(pressTimerRef.current);
-                                  pressTimerRef.current = null;
-                                  pressTargetRef.current = null;
-                                }
-                              }}
-                              onMouseLeave={() => {
-                                if (pressTimerRef.current) {
-                                  clearTimeout(pressTimerRef.current);
-                                  pressTimerRef.current = null;
-                                  pressTargetRef.current = null;
-                                }
-                              }}
-                              onTouchStart={() => {
-                                pressTargetRef.current = { subject: r.subject, grade: g };
-                                pressTimerRef.current = window.setTimeout(() => {
-                                  const next = subjectHours.filter((x) => !(x.subject === r.subject && x.grade === g));
-                                  setSubjectHours(next);
-                                  pressTimerRef.current = null;
-                                  pressTargetRef.current = null;
-                                }, 3000);
-                              }}
-                              onTouchEnd={() => {
-                                if (pressTimerRef.current) {
-                                  clearTimeout(pressTimerRef.current);
-                                  pressTimerRef.current = null;
-                                  pressTargetRef.current = null;
-                                }
-                              }}
-                            >
-                              <span draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", r.subject)} className="leading-tight">
-                                {SUBJECT_OPTIONS.find((o) => o.value === r.subject)?.label || r.subject}: {r.hours}h
-                              </span>
-                              <>
-                                <div className="flex flex-col">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const next = subjectHours.map((x) =>
-                                        x.subject === r.subject && x.grade === g ? { ...x, hours: x.hours + 1 } : x
-                                      );
-                                      setSubjectHours(next);
-                                    }}
-                                    className="bg-white/20 rounded px-1"
-                                  >
-                                    +
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const next = subjectHours.map((x) =>
-                                        x.subject === r.subject && x.grade === g ? { ...x, hours: Math.max(0, x.hours - 1) } : x
-                                      );
-                                      setSubjectHours(next);
-                                    }}
-                                    className="bg-white/20 rounded px-1"
-                                  >
-                                    –
-                                  </button>
-                                </div>
-                              </>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-3">
-                  <button
-                    onClick={async () => {
-                      const resp = await apiFetch("/api/admin/config-store/save", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ settings: { active_year: activeYear, terms_count: termsCount }, subject_hours: subjectHours }),
-                      });
-                      if (resp.ok) {
-                        const r = await resp.json();
-                        setSuccess(r.warning ? r.warning : `Horas y configuración guardadas (${r.count})`);
-                        const d = { active_year: activeYear, terms_count: termsCount };
-                        window.dispatchEvent(new CustomEvent("settings-updated", { detail: d }));
-                        // Reload history and subject hours
-                        try {
-                          const hh = await apiFetch("/api/admin/subject-hours");
-                          if (hh.ok) {
-                            setSubjectHours(await hh.json());
-                          }
-                          const hist = await apiFetch("/api/admin/config-store/history");
-                          if (hist.ok) {
-                            setHistory(await hist.json());
-                          }
-                        } catch {}
-                      } else setError("Error al guardar");
-                    }}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-                  >
-                    Guardar horas
-                  </button>
-                  </div>
-                </div>
-                <div className="lg:col-span-3 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Historial de cargas de asignaturas</h3>
-                  {history.length === 0 ? (
-                    <p className="text-sm text-slate-600">Sin perfiles guardados todavía. Usa “Guardar horas” para registrar el perfil de este año.</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {history.map((h) => (
-                        <div key={h.year} className="border border-slate-200 rounded-xl p-4">
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-6 gap-3 mb-4">
+                      {[6, 7, 8, 9, 10, 11].map((g) => (
+                        <div
+                          key={g}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            const subj = e.dataTransfer.getData("text/plain");
+                            const idx = subjectHours.findIndex((r) => r.subject === subj && r.grade === g);
+                            if (idx >= 0) {
+                              const next = [...subjectHours];
+                              next[idx].hours += 1;
+                              setSubjectHours(next);
+                            } else {
+                              setSubjectHours([...subjectHours, { subject: subj, grade: g, hours: 1 }]);
+                            }
+                          }}
+                          onClick={() => {
+                            if (!selectedSubject) return;
+                            const idx = subjectHours.findIndex((r) => r.subject === selectedSubject && r.grade === g);
+                            if (idx >= 0) {
+                              const next = [...subjectHours];
+                              next[idx].hours += 1;
+                              setSubjectHours(next);
+                            } else {
+                              setSubjectHours([...subjectHours, { subject: selectedSubject, grade: g, hours: 1 }]);
+                            }
+                          }}
+                          className="min-h-24 p-3 border border-slate-200 rounded-xl cursor-pointer"
+                        >
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-bold text-slate-800">Año {h.year}</span>
-                            {h.vigente && (
-                              <span className="text-xs px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 font-semibold">Perfil vigente</span>
-                            )}
+                            <span className="text-xs font-bold">Grado {g}</span>
+                            <span className="text-[10px]">{(Array.isArray(subjectHours) ? subjectHours.filter(r => r && r.grade === g) : []).reduce((a,b)=>a+b.hours,0)}h</span>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
-                              <h4 className="text-xs font-bold text-slate-700 mb-2">Grados 6–9</h4>
-                              <div className="flex flex-wrap gap-2">
-                                {h.grados_6_9.map((r) => (
-                                  <span key={`6-9-${r.subject}`} className="px-2 py-1 rounded-xl bg-slate-100 text-slate-800 text-[10px] uppercase font-black">
-                                    {r.subject}: {r.hours}h
-                                  </span>
-                                ))}
-                                {h.grados_6_9.length === 0 && <span className="text-[10px] text-slate-500">Sin datos</span>}
+                          <div className="flex flex-wrap gap-2">
+                            {Array.isArray(subjectHours) && subjectHours
+                              .filter(r => r && r.grade === g)
+                              .map((r, idx) => (
+                              <div
+                                key={`${r.subject}-${g}-${idx}`}
+                                className={`flex items-center gap-1 px-2 py-1 rounded-xl ${subjectColor(r.subject)} text-white text-[10px] uppercase font-black`}
+                                onMouseDown={() => {
+                                  pressTimerRef.current = window.setTimeout(() => {
+                                    setSubjectHours(subjectHours.filter(x => !(x.subject === r.subject && x.grade === g)));
+                                  }, 2000);
+                                }}
+                                onMouseUp={() => { if(pressTimerRef.current) clearTimeout(pressTimerRef.current); }}
+                              >
+                                <span draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", r.subject)}>
+                                  {SUBJECT_OPTIONS.find(o => o.value === r.subject)?.label}: {r.hours}h
+                                </span>
                               </div>
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-bold text-slate-700 mb-2">Grados 10–11</h4>
-                              <div className="flex flex-wrap gap-2">
-                                {h.grados_10_11.map((r) => (
-                                  <span key={`10-11-${r.subject}`} className="px-2 py-1 rounded-xl bg-slate-100 text-slate-800 text-[10px] uppercase font-black">
-                                    {r.subject}: {r.hours}h
-                                  </span>
-                                ))}
-                                {h.grados_10_11.length === 0 && <span className="text-[10px] text-slate-500">Sin datos</span>}
-                              </div>
-                            </div>
+                            ))}
                           </div>
                         </div>
                       ))}
                     </div>
-                  )}
+                  </div>
+
+                  {/* Historial temporalmente deshabilitado para diagnóstico */}
+                  {/* <div className="lg:col-span-3 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 p-6">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Historial de cargas</h3>
+                    {Array.isArray(history) && history.length === 0 ? <p className="text-sm">Sin registros.</p> : (
+                      <ul className="space-y-2">
+                        {(history || []).map((h, index) => h && (
+                          <li key={h.id || index} className="border border-slate-200 rounded-xl p-3 text-sm">
+                            Año {h.year} · Asignaciones: {Array.isArray(h?.snapshot) ? h.snapshot.length : 0} · {h?.created_at ? new Date(h.created_at).toLocaleString() : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div> */}
                 </div>
-              </div>
-            )}
-          </>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }

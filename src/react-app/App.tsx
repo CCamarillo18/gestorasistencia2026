@@ -12,8 +12,10 @@ import TeacherManagementPage from "@/react-app/pages/TeacherManagement";
 import MobileStudentsPage from "@/react-app/pages/MobileStudents";
 import StudentsPanelPage from "@/react-app/pages/StudentsPanel";
 import ProtectedRoute from "@/react-app/components/ProtectedRoute";
+import MyClasses from "@/react-app/pages/MyClasses";
 
 export default function App() {
+  console.log("Iniciando carga de app...");
   return (
     <Router>
       <Routes>
@@ -28,7 +30,23 @@ export default function App() {
           }
         />
         <Route
+          path="/mis-clases"
+          element={
+            <ProtectedRoute>
+              <MyClasses />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/attendance/:scheduleId"
+          element={
+            <ProtectedRoute>
+              <AttendancePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/asistencia/:scheduleId"
           element={
             <ProtectedRoute>
               <AttendancePage />

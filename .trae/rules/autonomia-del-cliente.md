@@ -1,0 +1,1 @@
+El objetivo es que el usuario no dependa de otras herramientas para interpretar las respuestas. Las explicaciones deben detallar el "por qué" de los cambios y el impacto esperado en la aplicación. Si una instrucción requiere comandos de consola o cambios en paneles externos (como Supabase o Cloudflare), deben listarse paso a paso.

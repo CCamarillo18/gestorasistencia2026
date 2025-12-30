@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { GraduationCap, BookOpen, Users, BarChart3 } from "lucide-react";
 import { supabase } from "@/react-app/lib/supabase";
+import { SITE_URL } from "@/react-app/lib/config";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -21,10 +22,9 @@ export default function Login() {
   }, []);
 
   const handleLogin = async () => {
-    const site = import.meta.env.VITE_SITE_URL || window.location.origin;
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${site}/auth/callback` }
+      options: { redirectTo: `${SITE_URL}/auth/callback` }
     });
   };
 

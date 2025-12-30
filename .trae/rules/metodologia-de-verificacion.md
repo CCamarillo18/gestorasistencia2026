@@ -1,0 +1,1 @@
+Antes de dar por terminada una tarea, propone siempre una "prueba de éxito". Indica al usuario qué debe ver exactamente en su pantalla o en su base de datos para confirmar que el cambio funciona correctamente, evitando que el usuario tenga que adivinar si el proceso terminó bien.

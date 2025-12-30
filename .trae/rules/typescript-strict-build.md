@@ -1,0 +1,1 @@
+odo código entregado debe garantizar que npm run build sea exitoso. Se prohíbe dejar imports no utilizados (TS6133), variables declaradas pero no leídas, o discrepancias entre los nombres de los archivos y los componentes exportados/importados.

@@ -40,7 +40,8 @@ export default function SchoolAbsences() {
       );
       if (response.ok) {
         const data = await response.json();
-        setAbsences(data);
+        const list = Array.isArray(data) ? data : (data?.data || []);
+        setAbsences(Array.isArray(list) ? list : []);
       }
     } catch (error) {
       console.error("Error al cargar ausencias:", error);

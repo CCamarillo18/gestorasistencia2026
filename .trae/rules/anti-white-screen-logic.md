@@ -1,0 +1,1 @@
+Para evitar pantallas blancas (blackout), es obligatorio validar que los datos sean arrays antes de usar métodos como .map() o .filter(). Ejemplo: Array.isArray(data) ? data.map(...) : []. También se debe usar optional chaining (?.) y manejar el nuevo formato de respuesta del worker { data, summary }.

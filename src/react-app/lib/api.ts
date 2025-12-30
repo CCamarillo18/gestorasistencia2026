@@ -8,9 +8,14 @@ export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {})
   if (token) headers.set("Authorization", `Bearer ${token}`);
   let url: RequestInfo | URL = input;
   if (typeof input === "string") {
-    url = input.startsWith("http")
-      ? input
-      : new URL(input, API_BASE).toString();
+    const normalized = input.startsWith("/api/") ? input.replace(/^\/api\//, "/") : input;
+    url = normalized.startsWith("http")
+      ? normalized
+      : new URL(normalized, API_BASE).toString();
   }
-  return fetch(url, { ...init, headers });
+  const res = await fetch(url, { ...init, headers });
+  if (!res.ok) {
+    console.error("API error", { url, status: res.status, statusText: res.statusText });
+  }
+  return res;
 }

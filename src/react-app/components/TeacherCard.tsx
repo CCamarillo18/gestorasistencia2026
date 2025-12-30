@@ -1,5 +1,5 @@
 import { subjectBadge } from "@/react-app/lib/subjects";
-import { FileDown, Settings, Pencil } from "lucide-react";
+import { FileDown, Settings, Pencil, Trash2 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { apiFetch } from "@/react-app/lib/api";
@@ -18,6 +18,7 @@ type Props = {
   hoursMap: Record<string, number>;
   onOpenAssign: (t: Teacher) => void;
   onEdit?: (t: Teacher) => void;
+  onDelete?: (t: Teacher) => void;
   canManage?: boolean;
 };
 
@@ -27,7 +28,7 @@ function computeHours(carga: Record<string, string[]>, hoursMap: Record<string, 
   return h;
 }
 
-export default function TeacherCard({ teacher, hoursMap, onOpenAssign, onEdit, canManage }: Props) {
+export default function TeacherCard({ teacher, hoursMap, onOpenAssign, onEdit, onDelete, canManage }: Props) {
   const totalHoras = computeHours(teacher.cargaAcademica || {}, hoursMap);
   let roles: string[] = [];
   if (Array.isArray(teacher.roles)) roles = teacher.roles as string[];
@@ -82,6 +83,14 @@ export default function TeacherCard({ teacher, hoursMap, onOpenAssign, onEdit, c
               className="px-2 py-1 rounded-xl bg-slate-100 text-slate-800 hover:bg-slate-200 transition flex items-center gap-1 text-xs"
             >
               <Pencil className="w-3.5 h-3.5" /> Editar
+            </button>
+          )}
+          {canManage && onDelete && (
+            <button
+              onClick={() => onDelete(teacher)}
+              className="px-2 py-1 rounded-xl bg-slate-100 text-slate-800 hover:bg-red-100 transition flex items-center gap-1 text-xs"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Eliminar
             </button>
           )}
         </div>

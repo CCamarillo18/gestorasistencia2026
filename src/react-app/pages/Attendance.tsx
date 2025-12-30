@@ -2,18 +2,19 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import Navbar from "@/react-app/components/Navbar";
 import { ArrowLeft, CheckCircle2, XCircle, Users, AlertTriangle, Clock } from "lucide-react";
-import type { StudentWithAttendance, TodayClass } from "@/shared/types";
+import type { TodayClass } from "@/shared/types";
 import { apiFetch } from "@/react-app/lib/api";
 
 export default function Attendance() {
   const { scheduleId } = useParams();
   const navigate = useNavigate();
-  const [students, setStudents] = useState<StudentWithAttendance[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
   const [classInfo, setClassInfo] = useState<TodayClass | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [hoursCount, setHoursCount] = useState(1);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export default function Attendance() {
       const response = await apiFetch(`/api/classes/${scheduleId}/students`);
       if (response.ok) {
         const data = await response.json();
-        setStudents(data.map((s: StudentWithAttendance) => ({ ...s, is_absent: false })));
+        setStudents(data.map((s: any) => ({ ...s, status: "present", observations: "" })));
       } else {
         setError("No se pudo cargar la lista de estudiantes");
       }
@@ -50,12 +51,8 @@ export default function Attendance() {
     }
   };
 
-  const toggleAbsent = (studentId: number) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === studentId ? { ...s, is_absent: !s.is_absent } : s
-      )
-    );
+  const setStatus = (studentId: number, status: "present" | "absent" | "late") => {
+    setStudents((prev) => prev.map((s) => (s.id === studentId ? { ...s, status } : s)));
   };
 
   const handleSubmit = async () => {
@@ -64,56 +61,36 @@ export default function Attendance() {
     setAlertMessage(null);
 
     try {
-      // Obtener clase actual para subject_id
-      const classResponse = await apiFetch(`/api/classes/${scheduleId}/students`);
-      if (!classResponse.ok) {
-        throw new Error("No se pudo obtener información de la clase");
-      }
-
-      const absentStudentIds = students
-        .filter((s) => s.is_absent)
-        .map((s) => s.id);
+      const todayRecords = students.map((s) => ({ student_id: s.id, status: s.status, observations: s.observations || "" }));
 
       const today = new Date().toISOString().split("T")[0];
 
       // Necesitamos obtener el subject_id del schedule
       // Por ahora, usaremos una llamada adicional o lo incluiremos en la respuesta original
       // Para simplificar, asumiremos que tenemos esta información
-      const todayClassesResponse = await apiFetch("/api/teachers/today-classes");
-      const todayClasses = await todayClassesResponse.json();
-      const currentClass = todayClasses.find(
-        (c: { schedule_id: number }) => c.schedule_id === parseInt(scheduleId!)
-      );
-
-      if (!currentClass) {
-        throw new Error("No se encontró la clase");
-      }
-
-      const response = await apiFetch("/api/attendance", {
+      const response = await apiFetch("/api/attendance/v2", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          subject_id: currentClass.subject_id,
-          schedule_id: parseInt(scheduleId!),
-          attendance_date: today,
-          absent_student_ids: absentStudentIds,
+          subject_id: classInfo?.subject_id,
+          course_id: classInfo?.course_id,
+          date: today,
+          hours_count: hoursCount,
+          records: todayRecords,
         }),
       });
 
       if (response.ok) {
-        const result = await response.json();
+        await response.json();
         setSuccess(true);
-        if (result.alert) {
-          setAlertMessage(result.alert);
-        }
         setTimeout(() => {
           navigate("/dashboard");
         }, 2000);
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Error al registrar asistencia");
+        const errorData = await response.json().catch(() => null);
+        setError(errorData?.error || "Error al registrar asistencia");
       }
     } catch (error) {
       console.error("Error al enviar asistencia:", error);
@@ -123,8 +100,9 @@ export default function Attendance() {
     }
   };
 
-  const presentCount = students.filter((s) => !s.is_absent).length;
-  const absentCount = students.filter((s) => s.is_absent).length;
+  const presentCount = students.filter((s) => s.status === "present").length;
+  const absentCount = students.filter((s) => s.status === "absent").length;
+  const lateCount = students.filter((s) => s.status === "late").length;
   const totalCount = students.length;
   const attendancePercentage =
     totalCount > 0 ? (presentCount / totalCount) * 100 : 0;
@@ -153,44 +131,43 @@ export default function Attendance() {
           </p>
         </div>
 
-        {/* Estadísticas */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Total</p>
-                <p className="text-2xl font-bold text-gray-900">{totalCount}</p>
+        <div className="mb-6">
+          <div className="flex gap-3 overflow-x-auto">
+            <div className="min-w-[160px] bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-600 mb-1">Total</p>
+                  <p className="text-xl font-bold text-gray-900">{totalCount}</p>
+                </div>
+                <Users className="w-6 h-6 text-gray-400" />
               </div>
-              <Users className="w-8 h-8 text-gray-400" />
             </div>
-          </div>
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-lg p-4 border border-green-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-700 mb-1">Presentes</p>
-                <p className="text-2xl font-bold text-green-900">{presentCount}</p>
+            <div className="min-w-[160px] bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-lg p-4 border border-green-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-green-700 mb-1">Presentes</p>
+                  <p className="text-xl font-bold text-green-900">{presentCount}</p>
+                </div>
+                <CheckCircle2 className="w-6 h-6 text-green-500" />
               </div>
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
             </div>
-          </div>
-          <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl shadow-lg p-4 border border-red-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-red-700 mb-1">Ausentes</p>
-                <p className="text-2xl font-bold text-red-900">{absentCount}</p>
+            <div className="min-w-[160px] bg-gradient-to-br from-red-50 to-rose-50 rounded-xl shadow-lg p-4 border border-red-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-red-700 mb-1">Ausentes</p>
+                  <p className="text-xl font-bold text-red-900">{absentCount}</p>
+                </div>
+                <XCircle className="w-6 h-6 text-red-500" />
               </div>
-              <XCircle className="w-8 h-8 text-red-500" />
             </div>
-          </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Intensidad</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {classInfo?.hours_per_week || 1}h
-                </p>
+            <div className="min-w-[160px] bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl shadow-lg p-4 border border-yellow-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-amber-700 mb-1">Tardanzas</p>
+                  <p className="text-xl font-bold text-amber-900">{lateCount}</p>
+                </div>
+                <Clock className="w-6 h-6 text-amber-500" />
               </div>
-              <Clock className="w-8 h-8 text-indigo-400" />
             </div>
           </div>
         </div>
@@ -250,49 +227,44 @@ export default function Attendance() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
           </div>
         ) : (
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-            <div className="divide-y divide-gray-200">
-              {students.map((student) => (
-                <button
-                  key={student.id}
-                  onClick={() => toggleAbsent(student.id)}
-                  className={`w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors ${
-                    student.is_absent ? "bg-red-50" : ""
-                  }`}
+          <div className="space-y-4">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Horas de clase</p>
+                <select
+                  value={hoursCount}
+                  onChange={(e) => setHoursCount(parseInt(e.target.value))}
+                  className="mt-1 border border-gray-300 rounded-xl px-3 py-2 text-sm"
                 >
-                  <div className="flex items-center space-x-4">
-                    <div
-                      className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                        student.is_absent
-                          ? "bg-red-500 border-red-500"
-                          : "bg-white border-gray-300"
-                      }`}
-                    >
-                      {student.is_absent && (
-                        <XCircle className="w-5 h-5 text-white" />
-                      )}
+                  {[1,2,3,4,5,6].map((h) => (
+                    <option key={h} value={h}>{h} hora{h > 1 ? "s" : ""}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+              <div className="divide-y divide-gray-200">
+                {(Array.isArray(students) ? students : []).map((student) => (
+                  <div key={student.id} className="w-full px-4 py-4 flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <span className="font-medium text-sm sm:text-base text-gray-900">{student.name}</span>
                     </div>
-                    <span
-                      className={`font-medium ${
-                        student.is_absent
-                          ? "text-red-900"
-                          : "text-gray-900"
-                      }`}
-                    >
-                      {student.name}
-                    </span>
+                    <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
+                      <div className="flex bg-slate-100 rounded-xl overflow-hidden w-full sm:w-auto">
+                        {["present","absent","late"].map((opt) => (
+                          <button
+                            key={opt}
+                            onClick={() => setStatus(student.id, opt as any)}
+                            className={`flex-1 px-3 py-2 text-sm ${student.status === opt ? "bg-white text-slate-900" : "text-slate-600"}`}
+                          >
+                            {opt === "present" ? "P" : opt === "absent" ? "A" : "T"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <span
-                    className={`text-sm font-semibold px-3 py-1 rounded-full ${
-                      student.is_absent
-                        ? "bg-red-100 text-red-700"
-                        : "bg-green-100 text-green-700"
-                    }`}
-                  >
-                    {student.is_absent ? "Ausente" : "Presente"}
-                  </span>
-                </button>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         )}
