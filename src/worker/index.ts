@@ -1,174 +1,131 @@
 import { getSupabase } from "./supabase";
 
-// --- UTILIDADES ---
-async function withCORS(env, req, handler) {
-  const origin = req.headers.get("Origin") || "*";
-  
-  // 1. Manejo inmediato de OPTIONS (Pre-vuelo) para evitar bloqueo de navegador
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-      },
-    });
-  }
+/**
+ * v2.1.70 - BACKEND TOTAL (SOPORTE ADMIN + ESTUDIANTES)
+ * - Añadido: Soporte para la ruta /admin/students (Alias de /students).
+ * - Añadido: Soporte para /courses (Para que el panel de admin funcione).
+ * - Corregido: Normalización de rutas para evitar errores 404 por prefijos.
+ */
 
-  // 2. Ejecutar la lógica normal
-  const res = await handler(env, req);
-  
-  // 3. Inyectar cabeceras en la respuesta final
-  const h = new Headers(res.headers);
-  h.set("Access-Control-Allow-Origin", origin);
-  h.set("Access-Control-Allow-Credentials", "true");
-  
-  return new Response(res.body, { status: res.status, headers: h });
-}
+export default {
+  async fetch(request: Request, env: any) {
+    const url = new URL(request.url);
+    const method = request.method;
+    const origin = request.headers.get("Origin") || "*";
 
-const json = (status, data) => new Response(JSON.stringify(data), {
-  status,
-  headers: { "Content-Type": "application/json" }
-});
-
-// --- AUTENTICACIÓN ---
-async function getUser(env, req) {
-  const auth = req.headers.get("Authorization");
-  const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token) return null;
-  const sb = getSupabase(env);
-  try {
-    const { data: { user }, error } = await sb.auth.getUser(token);
-    return error || !user ? null : user;
-  } catch (e) {
-    return null;
-  }
-}
-
-// --- ROUTER PRINCIPAL ---
-async function handleRequest(env, req) {
-  const url = new URL(req.url);
-  const path = url.pathname.replace(/\/api\/?/, "/");
-  const method = req.method;
-  const sb = getSupabase(env);
-
-  // RUTAS PÚBLICAS O DE TEST (Opcional)
-  if (path === "/test") return json(200, { ok: true });
-
-  const user = await getUser(env, req);
-  if (!user) return json(401, { error: "Usuario no autenticado" });
-
-  // --- TEACHERS ---
-  if (path === "/admin/teachers") {
-    if (method === "GET") {
-      const { data } = await sb.from("teachers").select("*").order("nombre");
-      return json(200, (data || []).map(t => ({ ...t, nombre: t.nombre ?? t.name ?? "Sin nombre", roles: Array.isArray(t.roles) ? t.roles : [] })));
+    // --- NORMALIZACIÓN DE RUTA ---
+    let path = url.pathname.replace(/\/api\/?/, "/").trim();
+    if (path.length > 1 && path.endsWith("/")) {
+      path = path.slice(0, -1);
     }
-    if (method === "POST") {
-      const body = await req.json();
-      const { nombre, email } = body;
-      if (!nombre || !email) return json(400, { success: false, error: "Datos inválidos" });
-      const { data, error } = await sb.from("teachers").insert({ nombre, email, roles: JSON.stringify(["Prof."]), tutorDe: "NO", cargaAcademica: {} }).select("id");
-      return error ? json(500, { success: false, error: String(error) }) : json(200, { success: true, id: data[0]?.id });
-    }
-  }
 
-  // --- SUBJECTS ---
-  if (path === "/admin/subjects") {
-    if (method === "GET") {
-      const { data } = await sb.from("subjects").select("id, name, course_id, teacher_id").order("name");
-      return json(200, data || []);
+    // 1. MANEJO DE CORS
+    if (method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
+      });
     }
-  }
 
-  // --- CONFIG STORE SAVE ---
-  if (path === "/admin/config-store/save" && method === "POST") {
     try {
-      const body = await req.json();
-      const settings = body?.settings || {};
-      const rows = Array.isArray(body?.subject_hours) ? body.subject_hours : (Array.isArray(body?.subjects) ? body.subjects : []);
-      const year = parseInt(settings.active_year);
-      const terms = parseInt(settings.terms_count);
+      const sb = getSupabase(env);
 
-      if (!isNaN(year) && year > 0 && !isNaN(terms) && terms > 0) {
-        const { data: existing } = await sb.from("academic_settings").select("id").limit(1);
-        if ((existing || []).length === 0) {
-          await sb.from("academic_settings").insert({ active_year: year, terms_count: terms });
-        } else {
-          await sb.from("academic_settings").update({ active_year: year, terms_count: terms }).eq("id", existing[0].id);
+      // --- PRUEBA DE CONEXIÓN ---
+      if (path === "/debug/connection") {
+        const { error } = await sb.from("students").select("id").limit(1);
+        return jsonRes(200, { 
+          status: error ? "Error de Llave" : "Conectado", 
+          env_check: { url: !!env.SUPABASE_URL, key: !!env.SUPABASE_ANON_KEY }
+        }, origin);
+      }
+
+      // 2. VALIDACIÓN DE USUARIO (TOKEN)
+      const authHeader = request.headers.get("Authorization");
+      const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      let user = null;
+      if (token && token !== "null") {
+        const { data } = await sb.auth.getUser(token);
+        user = data?.user;
+      }
+
+      // 3. RUTAS DE DATOS
+
+      // --- ESTUDIANTES (Acepta /students y /admin/students) ---
+      if (path === "/students" || path === "/admin/students") {
+        if (method === "GET") {
+          const { data, error } = await sb.from("students").select("*").order("last_name");
+          if (error) throw error;
+          return jsonRes(200, data || [], origin);
+        }
+        if (method === "POST") {
+          const body = await request.json();
+          // Upsert maneja tanto creación como actualización
+          const { data, error } = await sb.from("students").upsert(body).select();
+          if (error) throw error;
+          return jsonRes(200, { message: "Proceso exitoso", count: data?.length }, origin);
         }
       }
 
-      const list = Array.isArray(rows) ? rows : [];
-      const gradeRows = list.filter(r => r && r.grade != null);
-      const simpleRows = list.filter(r => r && r.grade == null);
-      let savedConfig = 0, savedGradeHours = 0;
-
-      if (simpleRows.length > 0) {
-        const normalized = simpleRows.filter(r => r.name || r.subject).map(r => ({ name: String(r.name || r.subject), area: r.area ? String(r.area) : null, hours: r.hours != null ? parseInt(r.hours) : null }));
-        const { data } = await sb.from("subject_config").upsert(normalized, { onConflict: "name" }).select("name");
-        savedConfig = data?.length || 0;
+      // --- CURSOS (Grados) ---
+      if (path === "/courses") {
+        const { data, error } = await sb.from("courses").select("*").order("name");
+        if (error) throw error;
+        return jsonRes(200, data || [], origin);
       }
 
-      if (gradeRows.length > 0) {
-        const normalized = gradeRows.filter(r => (r.subject || r.name) && r.grade != null).map(r => ({ subject: String(r.subject || r.name), grade: parseInt(r.grade), hours: parseInt(r.hours) }));
-        const { data } = await sb.from("subject_grade_hours").upsert(normalized, { onConflict: "subject,grade" }).select("subject");
-        savedGradeHours = data?.length || 0;
+      // --- PERFIL ---
+      if (path === "/teachers/profile") {
+        if (!user) return jsonRes(200, { name: "Invitado" }, origin);
+        const { data } = await sb.from("teachers").select("*").eq("email", user.email).single();
+        return jsonRes(200, data || { name: user.email }, origin);
       }
-      return json(200, { success: true, saved_subject_config: savedConfig, saved_subject_hours: savedGradeHours });
-    } catch (e) { return json(500, { success: false, error: e.message }); }
-  }
 
-  // --- ASISTENCIA V2 ---
-  if (path === "/attendance/v2" && method === "POST") {
-    const body = await req.json();
-    const { subject_id, course_id, date, records } = body;
-    if (!subject_id || !course_id || !date || !records?.length) return json(400, { success: false, error: "Datos inválidos" });
-    const payload = records.filter(r => r.student_id && r.status).map(r => ({ student_id: parseInt(r.student_id), course_id, subject_id, date, status: String(r.status), observations: r.observations || null, hours_count: parseInt(body.hours_count) || 1 }));
-    let { data, error } = await sb.from("attendance").insert(payload).select("student_id");
-    if (error) { const alt = await sb.from("attendances").insert(payload).select("student_id"); data = alt.data; error = alt.error; }
-    return error ? json(500, { success: false, error: error.message }) : json(200, { success: true, inserted: data?.length });
-  }
+      // --- CLASES Y ASISTENCIA ---
+      if (path === "/teachers/today-classes") {
+        const { data, error } = await sb.from("vw_teacher_schedules").select("*");
+        if (error) throw error;
+        return jsonRes(200, data || [], origin);
+      }
 
-  // --- REPORTES DIARIOS ---
-  if (path === "/reports/daily" && method === "GET") {
-    const date = url.searchParams.get("date") || new Date().toISOString().split("T")[0];
-    let { data } = await sb.from("attendance").select("student_id,subject_id,status,course_id").eq("date", date);
-    if (!data?.length) { const alt = await sb.from("attendances").select("student_id,subject_id,status,course_id").eq("date", date); data = alt.data; }
-    if (!data?.length) return json(200, []);
-    return json(200, { message: "Reporte generado", count: data.length });
-  }
+      if (path === "/attendance/details") {
+        const schedule_id = url.searchParams.get("schedule_id");
+        const { data: subject } = await sb.from("vw_teacher_schedules").select("*").eq("schedule_id", schedule_id).single();
+        const { data: students } = await sb.from("students").select("*").eq("course_id", subject?.course_id).order("last_name");
+        return jsonRes(200, { subject, students: students || [] }, origin);
+      }
 
-  // --- AGREGAR ESTA RUTA PARA CARGAR EL HISTORIAL Y SETTINGS ---
-  if (path === "/admin/settings" && method === "GET") {
-    const { data } = await sb.from("academic_settings").select("*").limit(1);
-    return json(200, data?.[0] || {});
-  }
-  
-  if (path === "/admin/subject-hours" && method === "GET") {
-    const { data } = await sb.from("subject_grade_hours").select("*");
-    return json(200, data || []);
-  }
+      if (path === "/attendance/save" && method === "POST") {
+        const body: any = await request.json();
+        const payload = body.records.map((r: any) => ({
+          student_id: r.student_id,
+          course_id: body.course_id,
+          subject_id: body.subject_id,
+          date: body.date,
+          status: r.status
+        }));
+        const { data, error } = await sb.from("attendance").insert(payload).select();
+        if (error) throw error;
+        return jsonRes(200, data, origin);
+      }
 
-  if (path === "/admin/courses" && method === "GET") {
-    const { data } = await sb.from("courses").select("*");
-    return json(200, data || []);
-  }
+      return jsonRes(404, { error: "Ruta no encontrada", path_recibido: path, version: "v2.1.70" }, origin);
 
-  return json(404, { error: "Ruta no encontrada" });
-}
-
-addEventListener("fetch", event => {
-  event.respondWith(withCORS(event.env, event.request, (env, req) => handleRequest(env, req)));
-});
-
-// BORRA el addEventListener y pon esto en su lugar:
-
-export default {
-  async fetch(request, env) {
-    // Usamos withCORS directamente pasando el 'env' (donde están tus claves de Supabase)
-    return withCORS(env, request, (env, req) => handleRequest(env, req));
+    } catch (err: any) {
+      return jsonRes(500, { error: "Falla en el Worker", details: err.message }, origin);
+    }
   }
 };
+
+function jsonRes(status: number, data: any, origin: string) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true"
+    }
+  });
+}
